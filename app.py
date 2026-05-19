@@ -19,9 +19,6 @@ st.title("📈 StockSense — Stock Market Predictor")
 st.markdown("**Predicting the next day's stock market direction using Machine Learning.**")
 st.divider()
 
-# ============================================
-# User Input
-# ============================================
 col1, col2 = st.columns([2, 1])
 
 with col1:
@@ -42,12 +39,8 @@ with col2:
     """)
 
 predict_btn = st.button("🚀 Predict!", use_container_width=True)
-
 st.divider()
 
-# ============================================
-# Main Logic
-# ============================================
 @st.cache_data
 def load_and_train(ticker):
     stock = yf.download(ticker, start="2020-01-01", end="2024-12-31", progress=False)
@@ -55,8 +48,12 @@ def load_and_train(ticker):
     if stock.empty or len(stock) < 100:
         return None, None, None, None
 
-    df = stock[['Close']].copy()
-    df.columns = ['Close']
+    # Close price extract karo — MultiIndex handle karna
+    close = stock['Close']
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    
+    df = close.to_frame(name='Close')
     df = df.dropna()
 
     df['MA_7']          = df['Close'].rolling(7).mean()
@@ -92,13 +89,12 @@ def load_and_train(ticker):
 if predict_btn or ticker_input:
     ticker = ticker_input.strip().upper()
 
-    with st.spinner(f"⏳ Fetching data for {ticker} and training model..."):
+    with st.spinner(f"⏳ Fetching data for {ticker}..."):
         df, model, features, accuracy = load_and_train(ticker)
 
     if df is None:
         st.error("❌ Stock not found or not enough data! Please check the ticker symbol.")
     else:
-        # Metrics
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("📊 Trading Days", f"{len(df)}")
         col2.metric("🤖 Accuracy", f"{accuracy*100:.2f}%")
@@ -107,7 +103,6 @@ if predict_btn or ticker_input:
 
         st.divider()
 
-        # Prediction
         st.subheader("🎯 Next Day Prediction")
         latest = df[features].iloc[-1]
         prediction = model.predict([latest])[0]
@@ -127,7 +122,6 @@ if predict_btn or ticker_input:
         st.caption("⚠️ Disclaimer: Educational purpose only. Not financial advice.")
         st.divider()
 
-        # Price Chart
         st.subheader(f"📈 {ticker} — Historical Price (2020-2024)")
         fig1, ax1 = plt.subplots(figsize=(14, 4))
         ax1.plot(df.index, df['Close'], color='royalblue', linewidth=1.5)
@@ -137,7 +131,6 @@ if predict_btn or ticker_input:
 
         st.divider()
 
-        # Feature Importance
         st.subheader("🔍 Feature Importance")
         importance = pd.DataFrame({
             'Feature': features,
@@ -145,7 +138,7 @@ if predict_btn or ticker_input:
         }).sort_values('Importance', ascending=True)
 
         fig2, ax2 = plt.subplots(figsize=(10, 4))
-        colors = ['#2ecc71' if x > 0.13 else '#e74c3c' 
+        colors = ['#2ecc71' if x > 0.13 else '#e74c3c'
                   for x in importance['Importance']]
         ax2.barh(importance['Feature'], importance['Importance'], color=colors)
         ax2.set_xlabel("Importance Score")
@@ -154,7 +147,6 @@ if predict_btn or ticker_input:
 
         st.divider()
 
-        # RSI Chart
         st.subheader("📊 RSI Indicator")
         fig3, ax3 = plt.subplots(figsize=(14, 3))
         ax3.plot(df.index, df['RSI'], color='orange', linewidth=1.2)
@@ -167,7 +159,6 @@ if predict_btn or ticker_input:
 
         st.divider()
 
-        # Latest Data Table
         st.subheader("📋 Latest 10 Days Data")
         st.dataframe(
             df[['Close','RSI','MA_7','MA_21','Daily_Return','Volatility']]
