@@ -37,9 +37,13 @@ def load_and_train():
     # Data fetch
     ticker = "ADANIENT.NS"
     stock = yf.download(ticker, start="2020-01-01", end="2024-12-31")
-    df = stock['Close'].copy()
-    df.columns = ['Close']
-    df = df.dropna()
+    df = stock[['Close']].copy()
+df.columns = ['Close']
+df = df.dropna()
+
+if len(df) < 50:
+    st.error("Not enough data fetched. Please try again.")
+    st.stop()
 
     # Features
     df['MA_7']          = df['Close'].rolling(7).mean()
