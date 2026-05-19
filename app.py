@@ -65,8 +65,8 @@ def fetch_data(ticker):
 def train_model(ticker):
     df = fetch_data(ticker)
 
-    if df is None or len(df) < 100:
-        return None, None, None, None
+    if df is None or len(df) < 30:
+     return None, None, None, None
 
     df['MA_7']          = df['Close'].rolling(7).mean()
     df['MA_21']         = df['Close'].rolling(21).mean()
