@@ -1,51 +1,32 @@
-# StockSense — Adani Enterprises Stock Predictor
-# Streamlit Web App
-
 import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import warnings
 warnings.filterwarnings('ignore')
 
-# ============================================
-# Page Config
-# ============================================
 st.set_page_config(
     page_title="StockSense — Adani Predictor",
     page_icon="📈",
     layout="wide"
 )
 
-# ============================================
-# Title
-# ============================================
 st.title("📈 StockSense — Adani Enterprises Stock Predictor")
 st.markdown("**Predicting the next day's stock market direction using Machine Learning.**")
 st.divider()
 
-# ============================================
-# Data Fetch + Model (with caching)
-# ============================================
 @st.cache_data
 def load_and_train():
-    # Data fetch
     ticker = "ADANIENT.NS"
     stock = yf.download(ticker, start="2020-01-01", end="2024-12-31")
     df = stock[['Close']].copy()
-df.columns = ['Close']
-df = df.dropna()
+    df.columns = ['Close']
+    df = df.dropna()
 
-if len(df) < 50:
-    st.error("Not enough data fetched. Please try again.")
-    st.stop()
-
-    # Features
     df['MA_7']          = df['Close'].rolling(7).mean()
     df['MA_21']         = df['Close'].rolling(21).mean()
     df['Daily_Return']  = df['Close'].pct_change() * 100
@@ -62,7 +43,6 @@ if len(df) < 50:
     df['Target']        = (df['Close'].shift(-1) > df['Close']).astype(int)
     df = df.dropna()
 
-    # Model
     features = ['MA_7','MA_21','Daily_Return','Volatility',
                 'RSI','MA_Cross','Price_vs_MA21','RSI_Zone']
     X = df[features]
@@ -77,24 +57,17 @@ if len(df) < 50:
 
     return df, model, features, accuracy
 
-# Loading spinner
 with st.spinner("⏳ Fetching Adani data and training model..."):
     df, model, features, accuracy = load_and_train()
 
-# ============================================
-# Top Metrics Row
-# ============================================
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("📊 Total Trading Days", "1,217")
+col1.metric("📊 Total Trading Days", f"{len(df)}")
 col2.metric("🤖 Model Accuracy", f"{accuracy*100:.2f}%")
 col3.metric("📅 Data Period", "2020 - 2024")
 col4.metric("🏦 Stock", "ADANIENT.NS")
 
 st.divider()
 
-# ============================================
-# Today's Prediction
-# ============================================
 st.subheader("🎯 Next Day Prediction")
 
 latest = df[features].iloc[-1]
@@ -113,12 +86,9 @@ with col2:
     st.metric("UP Probability",   f"{probability[1]*100:.1f}%")
     st.metric("DOWN Probability", f"{probability[0]*100:.1f}%")
 
-st.caption("⚠️ Disclaimer: This is for educational purposes only. Not financial advice.")
+st.caption("⚠️ Disclaimer: Educational purpose only. Not financial advice.")
 st.divider()
 
-# ============================================
-# Price Chart
-# ============================================
 st.subheader("📈 Adani Historical Price (2020-2024)")
 fig1, ax1 = plt.subplots(figsize=(14, 4))
 ax1.plot(df.index, df['Close'], color='royalblue', linewidth=1.5)
@@ -128,10 +98,7 @@ st.pyplot(fig1)
 
 st.divider()
 
-# ============================================
-# Feature Importance
-# ============================================
-st.subheader("🔍 Feature Importance — Konsa Factor Sabse Important?")
+st.subheader("🔍 Feature Importance")
 importance = pd.DataFrame({
     'Feature': features,
     'Importance': model.feature_importances_
@@ -146,9 +113,6 @@ st.pyplot(fig2)
 
 st.divider()
 
-# ============================================
-# Latest Data Table
-# ============================================
 st.subheader("📋 Latest 10 Days Data")
 st.dataframe(df[['Close','RSI','MA_7','MA_21',
                   'Daily_Return','Volatility']].tail(10).round(2))
