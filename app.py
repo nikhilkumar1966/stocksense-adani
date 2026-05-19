@@ -1,11 +1,11 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+import requests
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -19,21 +19,23 @@ st.title("📈 StockSense — Stock Market Predictor")
 st.markdown("**Predicting the next day's stock market direction using Machine Learning.**")
 st.divider()
 
+API_KEY = "SAOPJTIPH8X2DEF4"  # Yahan apni key daalo
+
 col1, col2 = st.columns([2, 1])
 
 with col1:
     ticker_input = st.text_input(
         "🔍 Enter Stock Ticker Symbol",
-        value="ADANIENT.NS",
-        placeholder="e.g. ADANIENT.NS, RELIANCE.NS, TCS.NS, AAPL"
+        value="ADANIENT.BSE",
+        placeholder="e.g. ADANIENT.BSE, RELIANCE.BSE, AAPL, TSLA"
     )
 
 with col2:
     st.markdown("### 💡 Examples")
     st.markdown("""
-    - `ADANIENT.NS` — Adani Enterprises  
-    - `RELIANCE.NS` — Reliance Industries  
-    - `TCS.NS` — Tata Consultancy  
+    - `ADANIENT.BSE` — Adani Enterprises  
+    - `RELIANCE.BSE` — Reliance Industries  
+    - `TCS.BSE` — Tata Consultancy  
     - `AAPL` — Apple Inc  
     - `TSLA` — Tesla  
     """)
@@ -42,19 +44,29 @@ predict_btn = st.button("🚀 Predict!", use_container_width=True)
 st.divider()
 
 @st.cache_data
-def load_and_train(ticker):
-    stock = yf.download(ticker, start="2020-01-01", end="2024-12-31", progress=False)
+def fetch_data(ticker):
+    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&outputsize=full&apikey={API_KEY}"
+    r = requests.get(url)
+    data = r.json()
 
-    if stock.empty or len(stock) < 100:
+    if "Time Series (Daily)" not in data:
+        return None
+
+    ts = data["Time Series (Daily)"]
+    df = pd.DataFrame.from_dict(ts, orient='index')
+    df.index = pd.to_datetime(df.index)
+    df = df.sort_index()
+    df = df.rename(columns={"4. close": "Close"})
+    df['Close'] = pd.to_numeric(df['Close'])
+    df = df[['Close']]
+    return df
+
+@st.cache_data
+def train_model(ticker):
+    df = fetch_data(ticker)
+
+    if df is None or len(df) < 100:
         return None, None, None, None
-
-    # Close price extract karo — MultiIndex handle karna
-    close = stock['Close']
-    if isinstance(close, pd.DataFrame):
-        close = close.iloc[:, 0]
-    
-    df = close.to_frame(name='Close')
-    df = df.dropna()
 
     df['MA_7']          = df['Close'].rolling(7).mean()
     df['MA_21']         = df['Close'].rolling(21).mean()
@@ -90,15 +102,15 @@ if predict_btn or ticker_input:
     ticker = ticker_input.strip().upper()
 
     with st.spinner(f"⏳ Fetching data for {ticker}..."):
-        df, model, features, accuracy = load_and_train(ticker)
+        df, model, features, accuracy = train_model(ticker)
 
     if df is None:
-        st.error("❌ Stock not found or not enough data! Please check the ticker symbol.")
+        st.error("❌ Stock not found! Free API allows 25 requests/day. Try: AAPL, TSLA, RELIANCE.BSE")
     else:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("📊 Trading Days", f"{len(df)}")
         col2.metric("🤖 Accuracy", f"{accuracy*100:.2f}%")
-        col3.metric("📅 Data Period", "2020-2024")
+        col3.metric("📅 Data Period", "Full History")
         col4.metric("🏦 Ticker", ticker)
 
         st.divider()
@@ -122,7 +134,7 @@ if predict_btn or ticker_input:
         st.caption("⚠️ Disclaimer: Educational purpose only. Not financial advice.")
         st.divider()
 
-        st.subheader(f"📈 {ticker} — Historical Price (2020-2024)")
+        st.subheader(f"📈 {ticker} — Historical Price")
         fig1, ax1 = plt.subplots(figsize=(14, 4))
         ax1.plot(df.index, df['Close'], color='royalblue', linewidth=1.5)
         ax1.set_ylabel("Price")
