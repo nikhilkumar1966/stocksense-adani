@@ -53,7 +53,7 @@ def load_and_train(ticker):
     stock = yf.download(ticker, start="2020-01-01", end="2024-12-31", progress=False)
 
     if stock.empty or len(stock) < 100:
-        return None, None, None, None, ticker
+        return None, None, None, None
 
     df = stock[['Close']].copy()
     df.columns = ['Close']
