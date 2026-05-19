@@ -37,7 +37,7 @@ st.divider()
 @st.cache_data
 def load_and_train(ticker):
     try:
-        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&outputsize=full&apikey={API_KEY}"
+        url = url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&outputsize=compact&apikey={API_KEY}"
         r = requests.get(url, timeout=15)
         data = r.json()
 
@@ -66,9 +66,12 @@ def load_and_train(ticker):
         df['RSI']           = 100 - (100 / (1 + gain/loss))
         df['MA_Cross']      = df['MA_7'] - df['MA_21']
         df['Price_vs_MA21'] = (df['Close'] - df['MA_21']) / df['MA_21'] * 100
-        df['RSI_Zone']      = pd.cut(df['RSI'],
-                                bins=[0,30,50,70,100],
-                                labels=[0,1,2,3]).astype(float)
+        df['RSI_Zone'] = pd.cut(
+        df['RSI'],
+    bins=[-1,30,50,70,101],
+    labels=[0,1,2,3]
+).astype(float)
+    
         df['Target']        = (df['Close'].shift(-1) > df['Close']).astype(int)
         df = df.dropna()
 
@@ -90,7 +93,8 @@ def load_and_train(ticker):
         return df, model, features, accuracy
 
     except Exception as e:
-        return None, None, None, None
+     st.error(f"Actual Error: {e}")
+     return None, None, None, None
 
 if predict_btn:
     ticker = ticker_input.strip().upper()
