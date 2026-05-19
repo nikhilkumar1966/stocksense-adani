@@ -10,19 +10,51 @@ import warnings
 warnings.filterwarnings('ignore')
 
 st.set_page_config(
-    page_title="StockSense — Adani Predictor",
+    page_title="StockSense",
     page_icon="📈",
     layout="wide"
 )
 
-st.title("📈 StockSense — Adani Enterprises Stock Predictor")
+st.title("📈 StockSense — Stock Market Predictor")
 st.markdown("**Predicting the next day's stock market direction using Machine Learning.**")
 st.divider()
 
+# ============================================
+# User Input
+# ============================================
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    ticker_input = st.text_input(
+        "🔍 Enter Stock Ticker Symbol",
+        value="ADANIENT.NS",
+        placeholder="e.g. ADANIENT.NS, RELIANCE.NS, TCS.NS, AAPL"
+    )
+
+with col2:
+    st.markdown("### 💡 Examples")
+    st.markdown("""
+    - `ADANIENT.NS` — Adani Enterprises  
+    - `RELIANCE.NS` — Reliance Industries  
+    - `TCS.NS` — Tata Consultancy  
+    - `AAPL` — Apple Inc  
+    - `TSLA` — Tesla  
+    """)
+
+predict_btn = st.button("🚀 Predict!", use_container_width=True)
+
+st.divider()
+
+# ============================================
+# Main Logic
+# ============================================
 @st.cache_data
-def load_and_train():
-    ticker = "ADANIENT.NS"
-    stock = yf.download(ticker, start="2020-01-01", end="2024-12-31")
+def load_and_train(ticker):
+    stock = yf.download(ticker, start="2020-01-01", end="2024-12-31", progress=False)
+
+    if stock.empty or len(stock) < 100:
+        return None, None, None, None, ticker
+
     df = stock[['Close']].copy()
     df.columns = ['Close']
     df = df.dropna()
@@ -57,62 +89,88 @@ def load_and_train():
 
     return df, model, features, accuracy
 
-with st.spinner("⏳ Fetching Adani data and training model..."):
-    df, model, features, accuracy = load_and_train()
+if predict_btn or ticker_input:
+    ticker = ticker_input.strip().upper()
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("📊 Total Trading Days", f"{len(df)}")
-col2.metric("🤖 Model Accuracy", f"{accuracy*100:.2f}%")
-col3.metric("📅 Data Period", "2020 - 2024")
-col4.metric("🏦 Stock", "ADANIENT.NS")
+    with st.spinner(f"⏳ Fetching data for {ticker} and training model..."):
+        df, model, features, accuracy = load_and_train(ticker)
 
-st.divider()
-
-st.subheader("🎯 Next Day Prediction")
-
-latest = df[features].iloc[-1]
-prediction = model.predict([latest])[0]
-probability = model.predict_proba([latest])[0]
-
-col1, col2 = st.columns(2)
-
-with col1:
-    if prediction == 1:
-        st.success("📈 ADANI KAL UPAR JAAYEGA — UP ✅")
+    if df is None:
+        st.error("❌ Stock not found or not enough data! Please check the ticker symbol.")
     else:
-        st.error("📉 ADANI KAL NEECHE JAAYEGA — DOWN ❌")
+        # Metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("📊 Trading Days", f"{len(df)}")
+        col2.metric("🤖 Accuracy", f"{accuracy*100:.2f}%")
+        col3.metric("📅 Data Period", "2020-2024")
+        col4.metric("🏦 Ticker", ticker)
 
-with col2:
-    st.metric("UP Probability",   f"{probability[1]*100:.1f}%")
-    st.metric("DOWN Probability", f"{probability[0]*100:.1f}%")
+        st.divider()
 
-st.caption("⚠️ Disclaimer: Educational purpose only. Not financial advice.")
-st.divider()
+        # Prediction
+        st.subheader("🎯 Next Day Prediction")
+        latest = df[features].iloc[-1]
+        prediction = model.predict([latest])[0]
+        probability = model.predict_proba([latest])[0]
 
-st.subheader("📈 Adani Historical Price (2020-2024)")
-fig1, ax1 = plt.subplots(figsize=(14, 4))
-ax1.plot(df.index, df['Close'], color='royalblue', linewidth=1.5)
-ax1.set_ylabel("Price (INR)")
-ax1.grid(True, alpha=0.3)
-st.pyplot(fig1)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if prediction == 1:
+                st.success("### 📈 TOMORROW: UP ✅")
+            else:
+                st.error("### 📉 TOMORROW: DOWN ❌")
+        with col2:
+            st.metric("📈 UP Probability", f"{probability[1]*100:.1f}%")
+        with col3:
+            st.metric("📉 DOWN Probability", f"{probability[0]*100:.1f}%")
 
-st.divider()
+        st.caption("⚠️ Disclaimer: Educational purpose only. Not financial advice.")
+        st.divider()
 
-st.subheader("🔍 Feature Importance")
-importance = pd.DataFrame({
-    'Feature': features,
-    'Importance': model.feature_importances_
-}).sort_values('Importance', ascending=True)
+        # Price Chart
+        st.subheader(f"📈 {ticker} — Historical Price (2020-2024)")
+        fig1, ax1 = plt.subplots(figsize=(14, 4))
+        ax1.plot(df.index, df['Close'], color='royalblue', linewidth=1.5)
+        ax1.set_ylabel("Price")
+        ax1.grid(True, alpha=0.3)
+        st.pyplot(fig1)
 
-fig2, ax2 = plt.subplots(figsize=(10, 4))
-colors = ['#2ecc71' if x > 0.13 else '#e74c3c' for x in importance['Importance']]
-ax2.barh(importance['Feature'], importance['Importance'], color=colors)
-ax2.set_xlabel("Importance Score")
-ax2.grid(True, alpha=0.3)
-st.pyplot(fig2)
+        st.divider()
 
-st.divider()
+        # Feature Importance
+        st.subheader("🔍 Feature Importance")
+        importance = pd.DataFrame({
+            'Feature': features,
+            'Importance': model.feature_importances_
+        }).sort_values('Importance', ascending=True)
 
-st.subheader("📋 Latest 10 Days Data")
-st.dataframe(df[['Close','RSI','MA_7','MA_21',
-                  'Daily_Return','Volatility']].tail(10).round(2))
+        fig2, ax2 = plt.subplots(figsize=(10, 4))
+        colors = ['#2ecc71' if x > 0.13 else '#e74c3c' 
+                  for x in importance['Importance']]
+        ax2.barh(importance['Feature'], importance['Importance'], color=colors)
+        ax2.set_xlabel("Importance Score")
+        ax2.grid(True, alpha=0.3)
+        st.pyplot(fig2)
+
+        st.divider()
+
+        # RSI Chart
+        st.subheader("📊 RSI Indicator")
+        fig3, ax3 = plt.subplots(figsize=(14, 3))
+        ax3.plot(df.index, df['RSI'], color='orange', linewidth=1.2)
+        ax3.axhline(70, color='red', linestyle='--', alpha=0.7, label='Overbought (70)')
+        ax3.axhline(30, color='green', linestyle='--', alpha=0.7, label='Oversold (30)')
+        ax3.set_ylabel("RSI")
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+        st.pyplot(fig3)
+
+        st.divider()
+
+        # Latest Data Table
+        st.subheader("📋 Latest 10 Days Data")
+        st.dataframe(
+            df[['Close','RSI','MA_7','MA_21','Daily_Return','Volatility']]
+            .tail(10).round(2),
+            use_container_width=True
+        )
