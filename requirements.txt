@@ -1,10 +1,7 @@
-yfinance
+yfinance==0.2.40
 pandas
 numpy
 scikit-learn
 matplotlib
-seaborn
-vaderSentiment
-newsapi-python
-plotly
 streamlit
+requests
