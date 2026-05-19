@@ -9,103 +9,97 @@ import requests
 import warnings
 warnings.filterwarnings('ignore')
 
-st.set_page_config(
-    page_title="StockSense",
-    page_icon="📈",
-    layout="wide"
-)
+st.set_page_config(page_title="StockSense", page_icon="📈", layout="wide")
 
 st.title("📈 StockSense — Stock Market Predictor")
 st.markdown("**Predicting the next day's stock market direction using Machine Learning.**")
 st.divider()
 
-API_KEY = "SAOPJTIPH8X2DEF4"  # Yahan apni key daalo
+API_KEY = "SAOPJTIPH8X2DEF4"
 
 col1, col2 = st.columns([2, 1])
-
 with col1:
-    ticker_input = st.text_input(
-        "🔍 Enter Stock Ticker Symbol",
-        value="ADANIENT.BSE",
-        placeholder="e.g. ADANIENT.BSE, RELIANCE.BSE, AAPL, TSLA"
-    )
-
+    ticker_input = st.text_input("🔍 Enter Stock Ticker", value="AAPL",
+        placeholder="e.g. AAPL, TSLA, MSFT, IBM")
 with col2:
     st.markdown("### 💡 Examples")
     st.markdown("""
-    - `ADANIENT.BSE` — Adani Enterprises  
-    - `RELIANCE.BSE` — Reliance Industries  
-    - `TCS.BSE` — Tata Consultancy  
-    - `AAPL` — Apple Inc  
+    - `AAPL` — Apple  
     - `TSLA` — Tesla  
+    - `MSFT` — Microsoft  
+    - `IBM` — IBM  
+    - `GOOGL` — Google  
     """)
 
 predict_btn = st.button("🚀 Predict!", use_container_width=True)
 st.divider()
 
 @st.cache_data
-def fetch_data(ticker):
-    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&outputsize=full&apikey={API_KEY}"
-    r = requests.get(url)
-    data = r.json()
+def load_and_train(ticker):
+    try:
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&outputsize=full&apikey={API_KEY}"
+        r = requests.get(url, timeout=15)
+        data = r.json()
 
-    if "Time Series (Daily)" not in data:
-        return None
+        if "Time Series (Daily)" not in data:
+            return None, None, None, None
 
-    ts = data["Time Series (Daily)"]
-    df = pd.DataFrame.from_dict(ts, orient='index')
-    df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-    df = df.rename(columns={"4. close": "Close"})
-    df['Close'] = pd.to_numeric(df['Close'])
-    df = df[['Close']]
-    return df
+        ts = data["Time Series (Daily)"]
+        df = pd.DataFrame.from_dict(ts, orient='index')
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        df = df.rename(columns={"4. close": "Close"})
+        df['Close'] = pd.to_numeric(df['Close'])
+        df = df[['Close']].copy()
+        df = df.dropna()
 
-@st.cache_data
-def train_model(ticker):
-    df = fetch_data(ticker)
+        if len(df) < 50:
+            return None, None, None, None
 
-    if df is None or len(df) < 30:
-     return None, None, None, None
+        df['MA_7']          = df['Close'].rolling(7).mean()
+        df['MA_21']         = df['Close'].rolling(21).mean()
+        df['Daily_Return']  = df['Close'].pct_change() * 100
+        df['Volatility']    = df['Daily_Return'].rolling(7).std()
+        delta               = df['Close'].diff()
+        gain                = delta.where(delta > 0, 0).rolling(14).mean()
+        loss                = -delta.where(delta < 0, 0).rolling(14).mean()
+        df['RSI']           = 100 - (100 / (1 + gain/loss))
+        df['MA_Cross']      = df['MA_7'] - df['MA_21']
+        df['Price_vs_MA21'] = (df['Close'] - df['MA_21']) / df['MA_21'] * 100
+        df['RSI_Zone']      = pd.cut(df['RSI'],
+                                bins=[0,30,50,70,100],
+                                labels=[0,1,2,3]).astype(float)
+        df['Target']        = (df['Close'].shift(-1) > df['Close']).astype(int)
+        df = df.dropna()
 
-    df['MA_7']          = df['Close'].rolling(7).mean()
-    df['MA_21']         = df['Close'].rolling(21).mean()
-    df['Daily_Return']  = df['Close'].pct_change() * 100
-    df['Volatility']    = df['Daily_Return'].rolling(7).std()
-    delta               = df['Close'].diff()
-    gain                = delta.where(delta > 0, 0).rolling(14).mean()
-    loss                = -delta.where(delta < 0, 0).rolling(14).mean()
-    df['RSI']           = 100 - (100 / (1 + gain/loss))
-    df['MA_Cross']      = df['MA_7'] - df['MA_21']
-    df['Price_vs_MA21'] = (df['Close'] - df['MA_21']) / df['MA_21'] * 100
-    df['RSI_Zone']      = pd.cut(df['RSI'],
-                            bins=[0,30,50,70,100],
-                            labels=[0,1,2,3]).astype(float)
-    df['Target']        = (df['Close'].shift(-1) > df['Close']).astype(int)
-    df = df.dropna()
+        if len(df) < 50:
+            return None, None, None, None
 
-    features = ['MA_7','MA_21','Daily_Return','Volatility',
-                'RSI','MA_Cross','Price_vs_MA21','RSI_Zone']
-    X = df[features]
-    y = df['Target']
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, shuffle=False)
-    model = RandomForestClassifier(
-        n_estimators=200, max_depth=5,
-        min_samples_split=20, random_state=42)
-    model.fit(X_train, y_train)
-    accuracy = accuracy_score(y_test, model.predict(X_test))
+        features = ['MA_7','MA_21','Daily_Return','Volatility',
+                    'RSI','MA_Cross','Price_vs_MA21','RSI_Zone']
+        X = df[features]
+        y = df['Target']
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, shuffle=False)
+        model = RandomForestClassifier(
+            n_estimators=200, max_depth=5,
+            min_samples_split=20, random_state=42)
+        model.fit(X_train, y_train)
+        accuracy = accuracy_score(y_test, model.predict(X_test))
 
-    return df, model, features, accuracy
+        return df, model, features, accuracy
 
-if predict_btn or ticker_input:
+    except Exception as e:
+        return None, None, None, None
+
+if predict_btn:
     ticker = ticker_input.strip().upper()
 
-    with st.spinner(f"⏳ Fetching data for {ticker}..."):
-        df, model, features, accuracy = train_model(ticker)
+    with st.spinner(f"⏳ Fetching {ticker} data..."):
+        df, model, features, accuracy = load_and_train(ticker)
 
     if df is None:
-        st.error("❌ Stock not found! Free API allows 25 requests/day. Try: AAPL, TSLA, RELIANCE.BSE")
+        st.error("❌ Stock not found! Use US stocks like AAPL, TSLA, MSFT, IBM, GOOGL")
     else:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("📊 Trading Days", f"{len(df)}")
@@ -137,7 +131,7 @@ if predict_btn or ticker_input:
         st.subheader(f"📈 {ticker} — Historical Price")
         fig1, ax1 = plt.subplots(figsize=(14, 4))
         ax1.plot(df.index, df['Close'], color='royalblue', linewidth=1.5)
-        ax1.set_ylabel("Price")
+        ax1.set_ylabel("Price (USD)")
         ax1.grid(True, alpha=0.3)
         st.pyplot(fig1)
 
@@ -174,6 +168,5 @@ if predict_btn or ticker_input:
         st.subheader("📋 Latest 10 Days Data")
         st.dataframe(
             df[['Close','RSI','MA_7','MA_21','Daily_Return','Volatility']]
-            .tail(10).round(2),
-            use_container_width=True
+            .tail(10).round(2)
         )
