@@ -20,22 +20,17 @@ API_KEY = "SAOPJTIPH8X2DEF4"
 col1, col2 = st.columns([2, 1])
 with col1:
     ticker_input = st.text_input("🔍 Enter Stock Ticker", value="AAPL",
-        placeholder="e.g. AAPL, TSLA, RELIANCE.BSE, TCS.BSE")
+        placeholder="e.g. AAPL, TSLA, MSFT, IBM")
 with col2:
     st.markdown("### 💡 Examples")
     st.markdown("""
-### 🇺🇸 US Stocks
-- `AAPL` — Apple  
-- `TSLA` — Tesla  
-- `MSFT` — Microsoft  
-- `GOOGL` — Google  
+    - `AAPL` — Apple  
+    - `TSLA` — Tesla  
+    - `MSFT` — Microsoft  
+    - `IBM` — IBM  
+    - `GOOGL` — Google  
+    """)
 
-### 🇮🇳 Indian Stocks
-- `RELIANCE.BSE` — Reliance  
-- `TCS.BSE` — TCS  
-- `INFY.BSE` — Infosys  
-- `HDFCBANK.BSE` — HDFC Bank  
-""")
 predict_btn = st.button("🚀 Predict!", use_container_width=True)
 st.divider()
 
@@ -108,7 +103,7 @@ if predict_btn:
         df, model, features, accuracy = load_and_train(ticker)
 
     if df is None:
-        st.error("❌ Stock not found! Try valid US or Indian stock symbols.")
+        st.error("❌ Stock not found! Use US stocks like AAPL, TSLA, MSFT, IBM, GOOGL")
     else:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("📊 Trading Days", f"{len(df)}")
